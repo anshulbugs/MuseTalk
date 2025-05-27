@@ -30,7 +30,7 @@ from transformers import WhisperModel
 import pickle
 import glob
 import shutil
-from scripts.realtime_inference import Avatar
+from webrtc_avatar import WebRTCAvatar
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 class MuseTalkVideoTrack(VideoStreamTrack):
     """Custom video track that generates MuseTalk frames"""
     
-    def __init__(self, avatar: Avatar, audio_processor: AudioProcessor, models: Dict[str, Any]):
+    def __init__(self, avatar: WebRTCAvatar, audio_processor: RealTimeAudioProcessor, models: Dict[str, Any]):
         super().__init__()
         self.avatar = avatar
         self.audio_processor = audio_processor
@@ -233,12 +233,17 @@ class MuseTalkWebRTCServer:
                 logger.info(f"Preloading avatar {avatar_id}...")
                 
                 # Force preparation to True to ensure all materials are preloaded
-                avatar = Avatar(
+                avatar = WebRTCAvatar(
                     avatar_id=avatar_id,
                     video_path=avatar_config["video_path"],
                     bbox_shift=avatar_config.get("bbox_shift", 0),
                     batch_size=1,  # Use batch size 1 for real-time
-                    preparation=True  # Always preload materials
+                    preparation=True,  # Always preload materials
+                    version="v15",
+                    extra_margin=10,
+                    parsing_mode="jaw",
+                    left_cheek_width=90,
+                    right_cheek_width=90
                 )
                 
                 # Verify all required materials are loaded
@@ -251,6 +256,9 @@ class MuseTalkWebRTCServer:
                 for attr in required_attrs:
                     if not hasattr(avatar, attr) or getattr(avatar, attr) is None:
                         raise ValueError(f"Avatar {avatar_id} missing required attribute: {attr}")
+                
+                # Compute latents using VAE
+                avatar.compute_latents(self.models['vae'])
                 
                 # Preload materials into GPU memory if available
                 if torch.cuda.is_available():
