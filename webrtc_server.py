@@ -444,7 +444,16 @@ class MuseTalkWebRTCServer:
             pc = self.peer_connections[client_id]
             candidate = data.get("candidate")
             if candidate:
-                await pc.addIceCandidate(candidate)
+                try:
+                    from aiortc import RTCIceCandidate
+                    ice_candidate = RTCIceCandidate(
+                        candidate=candidate.get("candidate"),
+                        sdpMid=candidate.get("sdpMid"),
+                        sdpMLineIndex=candidate.get("sdpMLineIndex")
+                    )
+                    await pc.addIceCandidate(ice_candidate)
+                except Exception as e:
+                    logger.error(f"Error adding ICE candidate: {e}")
     
     async def start_server(self, host: str = "localhost", port: int = 8765):
         """Start the WebRTC server"""

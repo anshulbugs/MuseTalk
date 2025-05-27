@@ -189,17 +189,22 @@ class MuseTalkHTTPServer:
                     
                     async def process_audio():
                         try:
-                            async for frame in track:
-                                if isinstance(frame, AudioFrame):
-                                    # Convert audio frame to numpy array
-                                    audio_data = frame.to_ndarray()
-                                    if len(audio_data.shape) > 1:
-                                        audio_data = audio_data.mean(axis=1)  # Convert to mono
-                                    
-                                    # Process audio chunk
-                                    await video_track.process_audio_chunk(
-                                        audio_data, frame.sample_rate
-                                    )
+                            while True:
+                                try:
+                                    frame = await track.recv()
+                                    if isinstance(frame, AudioFrame):
+                                        # Convert audio frame to numpy array
+                                        audio_data = frame.to_ndarray()
+                                        if len(audio_data.shape) > 1:
+                                            audio_data = audio_data.mean(axis=1)  # Convert to mono
+                                        
+                                        # Process audio chunk
+                                        await video_track.process_audio_chunk(
+                                            audio_data, frame.sample_rate
+                                        )
+                                except Exception as e:
+                                    logger.error(f"Error receiving audio frame: {e}")
+                                    break
                         except Exception as e:
                             logger.error(f"Error processing audio: {e}")
                     
@@ -243,7 +248,16 @@ class MuseTalkHTTPServer:
             pc = self.webrtc_server.peer_connections[client_id]
             candidate = data.get("candidate")
             if candidate:
-                await pc.addIceCandidate(candidate)
+                try:
+                    from aiortc import RTCIceCandidate
+                    ice_candidate = RTCIceCandidate(
+                        candidate=candidate.get("candidate"),
+                        sdpMid=candidate.get("sdpMid"),
+                        sdpMLineIndex=candidate.get("sdpMLineIndex")
+                    )
+                    await pc.addIceCandidate(ice_candidate)
+                except Exception as e:
+                    logger.error(f"Error adding ICE candidate: {e}")
     
     async def start_server(self, host: str = "localhost", port: int = 8080):
         """Start the HTTP server"""
