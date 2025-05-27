@@ -195,8 +195,14 @@ class MuseTalkHTTPServer:
                 logger.info(f"Created default video track for {client_id} using avatar {default_avatar_id}")
             
             # Add video track
-            pc.addTrack(self.webrtc_server.video_tracks[client_id])
-            logger.info(f"Added video track to peer connection for {client_id}")
+            video_track = self.webrtc_server.video_tracks[client_id]
+            pc.addTrack(video_track)
+            logger.info(f"Added video track to peer connection for {client_id}: {type(video_track)}")
+            
+            # Log all tracks in the peer connection
+            for sender in pc.getSenders():
+                if sender.track:
+                    logger.info(f"Peer connection has track: {sender.track.kind}")
             
             # Handle incoming audio track
             @pc.on("track")

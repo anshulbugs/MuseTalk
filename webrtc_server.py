@@ -52,6 +52,10 @@ class MuseTalkVideoTrack(VideoStreamTrack):
         
         # Default frame (first avatar frame)
         self.default_frame = self.avatar.frame_list_cycle[0]
+        self.frame_count = 0
+        
+        logger.info(f"MuseTalkVideoTrack initialized with avatar {avatar.avatar_id}")
+        logger.info(f"Default frame shape: {self.default_frame.shape}")
         
     async def recv(self):
         """Generate video frames for WebRTC"""
@@ -91,7 +95,11 @@ class MuseTalkVideoTrack(VideoStreamTrack):
         av_frame.time_base = "1/90000"
         
         self.last_frame_time = time.time()
-        logger.debug(f"Generated video frame: {av_frame.width}x{av_frame.height}")
+        self.frame_count += 1
+        
+        if self.frame_count % 30 == 0:  # Log every 30 frames
+            logger.info(f"Generated video frame #{self.frame_count}: {av_frame.width}x{av_frame.height}")
+        
         return av_frame
     
     async def process_audio_chunk(self, audio_data: np.ndarray, sample_rate: int = 16000):

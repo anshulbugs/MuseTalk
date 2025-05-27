@@ -405,8 +405,25 @@
                     
                     // Handle remote stream
                     this.peerConnection.ontrack = (event) => {
-                        console.log('Received remote stream');
-                        this.elements.remoteVideo.srcObject = event.streams[0];
+                        console.log('Received remote stream:', event);
+                        console.log('Remote streams:', event.streams);
+                        console.log('Remote track:', event.track);
+                        
+                        if (event.streams && event.streams[0]) {
+                            this.elements.remoteVideo.srcObject = event.streams[0];
+                            console.log('Set remote video source');
+                        } else {
+                            console.log('No streams in track event');
+                        }
+                    };
+                    
+                    // Additional debugging
+                    this.peerConnection.onconnectionstatechange = () => {
+                        console.log('Connection state:', this.peerConnection.connectionState);
+                    };
+                    
+                    this.peerConnection.oniceconnectionstatechange = () => {
+                        console.log('ICE connection state:', this.peerConnection.iceConnectionState);
                     };
                     
                     // Handle ICE candidates
