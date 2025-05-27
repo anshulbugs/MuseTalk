@@ -139,8 +139,15 @@ class SimpleVideoStreamer:
                 // Connect to WebSocket
                 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const wsHost = window.location.hostname;
-                const wsPort = window.location.port || '8080';
-                const wsUrl = `${wsProtocol}//${wsHost}:${wsPort}/ws`;
+                const wsPort = window.location.port;
+                
+                // For ngrok or other proxies, don't include port if it's the default port
+                let wsUrl;
+                if (wsPort && wsPort !== '80' && wsPort !== '443') {
+                    wsUrl = `${wsProtocol}//${wsHost}:${wsPort}/ws`;
+                } else {
+                    wsUrl = `${wsProtocol}//${wsHost}/ws`;
+                }
                 
                 console.log('Connecting to:', wsUrl);
                 websocket = new WebSocket(wsUrl);
