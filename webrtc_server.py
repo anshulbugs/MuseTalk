@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 class MuseTalkVideoTrack(VideoStreamTrack):
     """Custom video track that generates MuseTalk frames"""
     
-    def __init__(self, avatar: Avatar, audio_processor: RealTimeAudioProcessor, models: Dict[str, Any]):
+    def __init__(self, avatar: Avatar, audio_processor, models: Dict[str, Any]):
         super().__init__()
         self.avatar = avatar
         self.audio_processor = audio_processor
