@@ -66,17 +66,32 @@ class MuseTalkVideoTrack(VideoStreamTrack):
             # Try to get processed frame from queue
             frame_data = self.frame_queue.get_nowait()
             frame = frame_data
+            logger.info("Using processed frame from queue")
         except asyncio.QueueEmpty:
             # Use default frame if no processed frame available
             frame = self.default_frame
+            logger.debug("Using default avatar frame")
+            
+        # Add a simple test pattern overlay to verify video is working
+        frame_with_overlay = frame.copy()
+        
+        # Add timestamp text overlay
+        timestamp_text = f"Frame: {int(current_time)}"
+        cv2.putText(frame_with_overlay, timestamp_text, (10, 30),
+                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        
+        # Add a moving circle to show animation
+        circle_x = int((current_time * 50) % frame_with_overlay.shape[1])
+        cv2.circle(frame_with_overlay, (circle_x, 50), 20, (255, 0, 0), -1)
             
         # Convert to WebRTC VideoFrame
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_rgb = cv2.cvtColor(frame_with_overlay, cv2.COLOR_BGR2RGB)
         av_frame = VideoFrame.from_ndarray(frame_rgb, format="rgb24")
         av_frame.pts = int(current_time * 90000)  # 90kHz timestamp
         av_frame.time_base = "1/90000"
         
         self.last_frame_time = time.time()
+        logger.debug(f"Generated video frame: {av_frame.width}x{av_frame.height}")
         return av_frame
     
     async def process_audio_chunk(self, audio_data: np.ndarray, sample_rate: int = 16000):

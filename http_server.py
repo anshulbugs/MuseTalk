@@ -137,6 +137,12 @@ class MuseTalkHTTPServer:
                     )
                     self.webrtc_server.video_tracks[client_id] = video_track
                     
+                    # Add video track to existing peer connection if it exists
+                    if client_id in self.webrtc_server.peer_connections:
+                        pc = self.webrtc_server.peer_connections[client_id]
+                        pc.addTrack(video_track)
+                        logger.info(f"Added video track to existing peer connection for {client_id}")
+                    
                     await ws.send_str(json.dumps({
                         "type": "avatar_selected",
                         "avatar_id": avatar_id
@@ -175,9 +181,22 @@ class MuseTalkHTTPServer:
             pc = RTCPeerConnection(configuration=self.webrtc_server.rtc_config)
             self.webrtc_server.peer_connections[client_id] = pc
             
-            # Add video track if available
-            if client_id in self.webrtc_server.video_tracks:
-                pc.addTrack(self.webrtc_server.video_tracks[client_id])
+            # Create default video track if none exists
+            if client_id not in self.webrtc_server.video_tracks:
+                # Use first available avatar as default
+                default_avatar_id = list(self.webrtc_server.avatars.keys())[0]
+                from webrtc_server import MuseTalkVideoTrack
+                default_video_track = MuseTalkVideoTrack(
+                    self.webrtc_server.avatars[default_avatar_id],
+                    self.webrtc_server.audio_processor,
+                    self.webrtc_server.models
+                )
+                self.webrtc_server.video_tracks[client_id] = default_video_track
+                logger.info(f"Created default video track for {client_id} using avatar {default_avatar_id}")
+            
+            # Add video track
+            pc.addTrack(self.webrtc_server.video_tracks[client_id])
+            logger.info(f"Added video track to peer connection for {client_id}")
             
             # Handle incoming audio track
             @pc.on("track")
