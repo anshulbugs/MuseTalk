@@ -267,8 +267,16 @@
                     // Connect to WebSocket server (use same host as HTTP server)
                     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                     const wsHost = window.location.hostname;
-                    const wsPort = window.location.port || '8080';
-                    const wsUrl = `${wsProtocol}//${wsHost}:${wsPort}/ws`;
+                    const wsPort = window.location.port;
+                    
+                    // For ngrok or other proxies, don't include port if it's the default port
+                    let wsUrl;
+                    if (wsPort && wsPort !== '80' && wsPort !== '443') {
+                        wsUrl = `${wsProtocol}//${wsHost}:${wsPort}/ws`;
+                    } else {
+                        wsUrl = `${wsProtocol}//${wsHost}/ws`;
+                    }
+                    
                     console.log('Attempting WebSocket connection to:', wsUrl);
                     this.websocket = new WebSocket(wsUrl);
                     
