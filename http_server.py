@@ -178,7 +178,11 @@ class MuseTalkHTTPServer:
             from aiortc import RTCPeerConnection, RTCSessionDescription
             from av import AudioFrame
             
-            pc = RTCPeerConnection(configuration=self.webrtc_server.rtc_config)
+            # Create peer connection with local-only configuration
+            config = RTCConfiguration(
+                iceServers=[],  # No STUN/TURN servers for local testing
+            )
+            pc = RTCPeerConnection(configuration=config)
             self.webrtc_server.peer_connections[client_id] = pc
             
             # Create default video track if none exists

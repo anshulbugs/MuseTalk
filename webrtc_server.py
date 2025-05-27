@@ -195,11 +195,9 @@ class MuseTalkWebRTCServer:
         self.peer_connections = {}
         self.video_tracks = {}
         
-        # WebRTC configuration
+        # WebRTC configuration - local only for testing
         self.rtc_config = RTCConfiguration(
-            iceServers=[
-                RTCIceServer(urls=["stun:stun.l.google.com:19302"]),
-            ]
+            iceServers=[]  # No STUN/TURN servers for local testing
         )
         
     async def initialize_models(self):
