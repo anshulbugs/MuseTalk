@@ -446,14 +446,20 @@ class MuseTalkWebRTCServer:
             if candidate:
                 try:
                     from aiortc import RTCIceCandidate
-                    ice_candidate = RTCIceCandidate(
-                        candidate=candidate.get("candidate"),
-                        sdpMid=candidate.get("sdpMid"),
-                        sdpMLineIndex=candidate.get("sdpMLineIndex")
-                    )
-                    await pc.addIceCandidate(ice_candidate)
+                    # Parse the candidate string to extract components
+                    candidate_str = candidate.get("candidate", "")
+                    if candidate_str:
+                        # Create ICE candidate from the candidate string
+                        ice_candidate = RTCIceCandidate.from_sdp(candidate_str)
+                        ice_candidate.sdpMid = candidate.get("sdpMid")
+                        ice_candidate.sdpMLineIndex = candidate.get("sdpMLineIndex")
+                        await pc.addIceCandidate(ice_candidate)
+                    else:
+                        logger.warning("Empty candidate string received")
                 except Exception as e:
                     logger.error(f"Error adding ICE candidate: {e}")
+                    # If ICE candidate parsing fails, just log and continue
+                    logger.debug(f"ICE candidate data: {candidate}")
     
     async def start_server(self, host: str = "localhost", port: int = 8765):
         """Start the WebRTC server"""
