@@ -164,6 +164,9 @@ class MuseTalkProcessor(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         """Process incoming frames"""
         
+        # Call parent class method first
+        await super().process_frame(frame, direction)
+        
         if isinstance(frame, AudioRawFrame):
             # Process audio frame
             try:
@@ -186,9 +189,6 @@ class MuseTalkProcessor(FrameProcessor):
                         
             except Exception as e:
                 logger.error(f"Error processing audio frame: {e}")
-        else:
-            # Pass through other frames (non-audio frames)
-            await self.push_frame(frame, direction)
     
     async def generate_video_frame(self, audio_chunk: np.ndarray) -> ImageRawFrame:
         """Generate video frame from audio chunk"""
