@@ -58,6 +58,8 @@ class MuseTalkProcessor(FrameProcessor):
         self.audio_buffer = []
         self.buffer_size = 1600  # 100ms at 16kHz
         self.frame_count = 0
+        self.video_timer = 0
+        self.send_test_frame = True
         
     async def start(self, frame: Frame) -> None:
         """Initialize MuseTalk models and avatars"""
@@ -167,17 +169,30 @@ class MuseTalkProcessor(FrameProcessor):
         # Call parent class method first
         await super().process_frame(frame, direction)
         
+        # Send test video frame periodically to verify video pipeline
+        if self.send_test_frame and self.current_avatar:
+            self.video_timer += 1
+            if self.video_timer % 30 == 0:  # Every 30 frames
+                logger.info("Sending test video frame...")
+                test_frame = await self.generate_test_video_frame()
+                if test_frame:
+                    await self.push_frame(test_frame, direction)
+        
         if isinstance(frame, AudioRawFrame):
             # Process audio frame
             try:
+                logger.info(f"Received audio frame: {len(frame.audio)} bytes")
+                
                 # Convert audio to numpy array
                 audio_data = np.frombuffer(frame.audio, dtype=np.int16).astype(np.float32) / 32768.0
                 
                 # Add to buffer
                 self.audio_buffer.extend(audio_data.tolist())
+                logger.info(f"Audio buffer size: {len(self.audio_buffer)}")
                 
                 # Process if we have enough data
                 if len(self.audio_buffer) >= self.buffer_size:
+                    logger.info("Processing audio chunk for video generation...")
                     # Take chunk from buffer
                     chunk = np.array(self.audio_buffer[:self.buffer_size], dtype=np.float32)
                     self.audio_buffer = self.audio_buffer[self.buffer_size//4:]  # 25% overlap
@@ -185,10 +200,17 @@ class MuseTalkProcessor(FrameProcessor):
                     # Generate video frame
                     video_frame = await self.generate_video_frame(chunk)
                     if video_frame is not None:
+                        logger.info("Generated video frame, pushing to pipeline...")
                         await self.push_frame(video_frame, direction)
+                    else:
+                        logger.warning("Video frame generation returned None")
                         
             except Exception as e:
                 logger.error(f"Error processing audio frame: {e}")
+                import traceback
+                traceback.print_exc()
+        else:
+            logger.debug(f"Received frame type: {type(frame)}")
     
     async def generate_video_frame(self, audio_chunk: np.ndarray) -> ImageRawFrame:
         """Generate video frame from audio chunk"""
@@ -281,6 +303,30 @@ class MuseTalkProcessor(FrameProcessor):
             
         except Exception as e:
             logger.error(f"Error generating video frame: {e}")
+            return None
+    
+    async def generate_test_video_frame(self) -> ImageRawFrame:
+        """Generate a simple test video frame to verify pipeline"""
+        try:
+            if not self.current_avatar:
+                return None
+                
+            # Get current avatar frame
+            frame_idx = self.frame_count % len(self.current_avatar.frame_list_cycle)
+            ori_frame = self.current_avatar.frame_list_cycle[frame_idx].copy()
+            
+            self.frame_count += 1
+            
+            # Convert to RGB and create frame
+            frame_rgb = cv2.cvtColor(ori_frame, cv2.COLOR_BGR2RGB)
+            return ImageRawFrame(
+                image=frame_rgb.tobytes(),
+                size=(frame_rgb.shape[1], frame_rgb.shape[0]),
+                format="RGB"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error generating test video frame: {e}")
             return None
 
 async def main():
