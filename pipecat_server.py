@@ -161,7 +161,7 @@ class MuseTalkProcessor(FrameProcessor):
         else:
             raise RuntimeError("No avatars loaded")
     
-    async def process_frame(self, frame: Frame, direction: FrameDirection) -> AsyncGenerator[Frame, None]:
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
         """Process incoming frames"""
         
         if isinstance(frame, AudioRawFrame):
@@ -182,13 +182,13 @@ class MuseTalkProcessor(FrameProcessor):
                     # Generate video frame
                     video_frame = await self.generate_video_frame(chunk)
                     if video_frame is not None:
-                        yield video_frame
+                        await self.push_frame(video_frame, direction)
                         
             except Exception as e:
                 logger.error(f"Error processing audio frame: {e}")
-        
-        # Pass through other frames
-        yield frame
+        else:
+            # Pass through other frames (non-audio frames)
+            await self.push_frame(frame, direction)
     
     async def generate_video_frame(self, audio_chunk: np.ndarray) -> ImageRawFrame:
         """Generate video frame from audio chunk"""
