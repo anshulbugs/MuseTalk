@@ -175,7 +175,7 @@ class MuseTalkHTTPServer:
     async def handle_offer(self, ws, client_id: str, data: dict):
         """Handle WebRTC offer"""
         try:
-            from aiortc import RTCPeerConnection, RTCSessionDescription
+            from aiortc import RTCPeerConnection, RTCSessionDescription, RTCConfiguration
             from av import AudioFrame
             
             # Create peer connection with local-only configuration
