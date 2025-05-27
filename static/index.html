@@ -173,7 +173,7 @@
             </div>
             
             <div class="control-group">
-                <button id="connectBtn" disabled>Connect</button>
+                <button id="connectBtn">Connect</button>
             </div>
             
             <div class="control-group">
@@ -198,7 +198,7 @@
         </div>
         
         <div id="status" class="status disconnected">
-            Disconnected
+            Ready to connect - Click "Connect" button to start
         </div>
         
         <div id="avatarInfo" class="avatar-info" style="display: none;">
@@ -222,7 +222,6 @@
                 
                 this.initializeElements();
                 this.setupEventListeners();
-                this.connect();
             }
             
             initializeElements() {
@@ -269,7 +268,9 @@
                     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                     const wsHost = window.location.hostname;
                     const wsPort = window.location.port || '8080';
-                    this.websocket = new WebSocket(`${wsProtocol}//${wsHost}:${wsPort}/ws`);
+                    const wsUrl = `${wsProtocol}//${wsHost}:${wsPort}/ws`;
+                    console.log('Attempting WebSocket connection to:', wsUrl);
+                    this.websocket = new WebSocket(wsUrl);
                     
                     this.websocket.onopen = () => {
                         console.log('WebSocket connected');
@@ -297,6 +298,7 @@
                     
                     this.websocket.onerror = (error) => {
                         console.error('WebSocket error:', error);
+                        console.error('WebSocket readyState:', this.websocket.readyState);
                         this.showError('Connection failed. Make sure the server is running.');
                         this.updateStatus('Connection failed', 'disconnected');
                     };
