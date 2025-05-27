@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MuseTalk WebRTC Streaming</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 30px;
+            align-items: center;
+        }
+        
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        label {
+            font-weight: bold;
+            color: #555;
+        }
+        
+        select, button {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        button {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        button:hover {
+            background-color: #0056b3;
+        }
+        
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .video-container {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .video-section {
+            flex: 1;
+            min-width: 300px;
+            max-width: 500px;
+        }
+        
+        .video-section h3 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        video {
+            width: 100%;
+            height: auto;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            background-color: #000;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: bold;
+        }
+        
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.connecting {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .avatar-info {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MuseTalk Real-Time Streaming</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="avatarSelect">Select Avatar:</label>
+                <select id="avatarSelect" disabled>
+                    <option value="">Loading avatars...</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <button id="connectBtn" disabled>Connect</button>
+            </div>
+            
+            <div class="control-group">
+                <button id="startBtn" disabled>Start Streaming</button>
+            </div>
+            
+            <div class="control-group">
+                <button id="stopBtn" disabled>Stop Streaming</button>
+            </div>
+        </div>
+        
+        <div class="video-container">
+            <div class="video-section">
+                <h3>Your Camera</h3>
+                <video id="localVideo" autoplay muted playsinline></video>
+            </div>
+            
+            <div class="video-section">
+                <h3>MuseTalk Avatar</h3>
+                <video id="remoteVideo" autoplay playsinline></video>
+            </div>
+        </div>
+        
+        <div id="status" class="status disconnected">
+            Disconnected
+        </div>
+        
+        <div id="avatarInfo" class="avatar-info" style="display: none;">
+            <strong>Selected Avatar:</strong> <span id="avatarName"></span><br>
+            <strong>Video Path:</strong> <span id="avatarPath"></span>
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+    </div>
+
+    <script>
+        class MuseTalkWebRTCClient {
+            constructor() {
+                this.websocket = null;
+                this.peerConnection = null;
+                this.localStream = null;
+                this.isConnected = false;
+                this.isStreaming = false;
+                this.selectedAvatar = null;
+                this.avatars = [];
+                
+                this.initializeElements();
+                this.setupEventListeners();
+                this.connect();
+            }
+            
+            initializeElements() {
+                this.elements = {
+                    avatarSelect: document.getElementById('avatarSelect'),
+                    connectBtn: document.getElementById('connectBtn'),
+                    startBtn: document.getElementById('startBtn'),
+                    stopBtn: document.getElementById('stopBtn'),
+                    localVideo: document.getElementById('localVideo'),
+                    remoteVideo: document.getElementById('remoteVideo'),
+                    status: document.getElementById('status'),
+                    avatarInfo: document.getElementById('avatarInfo'),
+                    avatarName: document.getElementById('avatarName'),
+                    avatarPath: document.getElementById('avatarPath'),
+                    error: document.getElementById('error')
+                };
+            }
+            
+            setupEventListeners() {
+                this.elements.connectBtn.addEventListener('click', () => this.connect());
+                this.elements.startBtn.addEventListener('click', () => this.startStreaming());
+                this.elements.stopBtn.addEventListener('click', () => this.stopStreaming());
+                this.elements.avatarSelect.addEventListener('change', (e) => this.selectAvatar(e.target.value));
+            }
+            
+            updateStatus(message, type = 'disconnected') {
+                this.elements.status.textContent = message;
+                this.elements.status.className = `status ${type}`;
+            }
+            
+            showError(message) {
+                this.elements.error.textContent = message;
+                this.elements.error.style.display = 'block';
+                setTimeout(() => {
+                    this.elements.error.style.display = 'none';
+                }, 5000);
+            }
+            
+            async connect() {
+                try {
+                    this.updateStatus('Connecting...', 'connecting');
+                    
+                    // Connect to WebSocket server (use same host as HTTP server)
+                    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsHost = window.location.hostname;
+                    const wsPort = window.location.port || '8080';
+                    this.websocket = new WebSocket(`${wsProtocol}//${wsHost}:${wsPort}/ws`);
+                    
+                    this.websocket.onopen = () => {
+                        console.log('WebSocket connected');
+                        this.isConnected = true;
+                        this.updateStatus('Connected', 'connected');
+                        this.elements.connectBtn.disabled = true;
+                        
+                        // Request available avatars
+                        this.sendMessage({ type: 'get_avatars' });
+                    };
+                    
+                    this.websocket.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        this.handleSignalingMessage(data);
+                    };
+                    
+                    this.websocket.onclose = () => {
+                        console.log('WebSocket disconnected');
+                        this.isConnected = false;
+                        this.updateStatus('Disconnected', 'disconnected');
+                        this.elements.connectBtn.disabled = false;
+                        this.elements.startBtn.disabled = true;
+                        this.elements.stopBtn.disabled = true;
+                    };
+                    
+                    this.websocket.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.showError('Connection failed. Make sure the server is running.');
+                        this.updateStatus('Connection failed', 'disconnected');
+                    };
+                    
+                } catch (error) {
+                    console.error('Connection error:', error);
+                    this.showError('Failed to connect to server');
+                    this.updateStatus('Connection failed', 'disconnected');
+                }
+            }
+            
+            sendMessage(message) {
+                if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                    this.websocket.send(JSON.stringify(message));
+                }
+            }
+            
+            async handleSignalingMessage(data) {
+                switch (data.type) {
+                    case 'avatars':
+                        this.handleAvatarsList(data.avatars);
+                        break;
+                    case 'avatar_selected':
+                        this.handleAvatarSelected(data.avatar_id);
+                        break;
+                    case 'answer':
+                        await this.handleAnswer(data);
+                        break;
+                    case 'ice_candidate':
+                        await this.handleIceCandidate(data);
+                        break;
+                    case 'error':
+                        this.showError(data.message);
+                        break;
+                }
+            }
+            
+            handleAvatarsList(avatars) {
+                this.avatars = avatars;
+                this.elements.avatarSelect.innerHTML = '<option value="">Select an avatar...</option>';
+                
+                avatars.forEach(avatar => {
+                    const option = document.createElement('option');
+                    option.value = avatar.id;
+                    option.textContent = avatar.name;
+                    this.elements.avatarSelect.appendChild(option);
+                });
+                
+                this.elements.avatarSelect.disabled = false;
+            }
+            
+            selectAvatar(avatarId) {
+                if (!avatarId) return;
+                
+                const avatar = this.avatars.find(a => a.id === avatarId);
+                if (avatar) {
+                    this.selectedAvatar = avatar;
+                    this.elements.avatarName.textContent = avatar.name;
+                    this.elements.avatarPath.textContent = avatar.video_path;
+                    this.elements.avatarInfo.style.display = 'block';
+                    this.elements.startBtn.disabled = false;
+                    
+                    // Send avatar selection to server
+                    this.sendMessage({
+                        type: 'select_avatar',
+                        avatar_id: avatarId
+                    });
+                }
+            }
+            
+            handleAvatarSelected(avatarId) {
+                console.log(`Avatar ${avatarId} selected on server`);
+            }
+            
+            async startStreaming() {
+                try {
+                    this.updateStatus('Starting stream...', 'connecting');
+                    
+                    // Get user media
+                    this.localStream = await navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: true
+                    });
+                    
+                    this.elements.localVideo.srcObject = this.localStream;
+                    
+                    // Create peer connection
+                    this.peerConnection = new RTCPeerConnection({
+                        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                    });
+                    
+                    // Add local stream to peer connection
+                    this.localStream.getTracks().forEach(track => {
+                        this.peerConnection.addTrack(track, this.localStream);
+                    });
+                    
+                    // Handle remote stream
+                    this.peerConnection.ontrack = (event) => {
+                        console.log('Received remote stream');
+                        this.elements.remoteVideo.srcObject = event.streams[0];
+                    };
+                    
+                    // Handle ICE candidates
+                    this.peerConnection.onicecandidate = (event) => {
+                        if (event.candidate) {
+                            this.sendMessage({
+                                type: 'ice_candidate',
+                                candidate: event.candidate
+                            });
+                        }
+                    };
+                    
+                    // Create offer
+                    const offer = await this.peerConnection.createOffer();
+                    await this.peerConnection.setLocalDescription(offer);
+                    
+                    // Send offer to server
+                    this.sendMessage({
+                        type: 'offer',
+                        sdp: offer.sdp
+                    });
+                    
+                    this.isStreaming = true;
+                    this.elements.startBtn.disabled = true;
+                    this.elements.stopBtn.disabled = false;
+                    this.elements.avatarSelect.disabled = true;
+                    this.updateStatus('Streaming', 'connected');
+                    
+                } catch (error) {
+                    console.error('Error starting stream:', error);
+                    this.showError('Failed to start streaming: ' + error.message);
+                    this.updateStatus('Connected', 'connected');
+                }
+            }
+            
+            async handleAnswer(data) {
+                try {
+                    await this.peerConnection.setRemoteDescription({
+                        type: 'answer',
+                        sdp: data.sdp
+                    });
+                } catch (error) {
+                    console.error('Error handling answer:', error);
+                }
+            }
+            
+            async handleIceCandidate(data) {
+                try {
+                    await this.peerConnection.addIceCandidate(data.candidate);
+                } catch (error) {
+                    console.error('Error handling ICE candidate:', error);
+                }
+            }
+            
+            stopStreaming() {
+                try {
+                    if (this.localStream) {
+                        this.localStream.getTracks().forEach(track => track.stop());
+                        this.localStream = null;
+                    }
+                    
+                    if (this.peerConnection) {
+                        this.peerConnection.close();
+                        this.peerConnection = null;
+                    }
+                    
+                    this.elements.localVideo.srcObject = null;
+                    this.elements.remoteVideo.srcObject = null;
+                    
+                    this.isStreaming = false;
+                    this.elements.startBtn.disabled = false;
+                    this.elements.stopBtn.disabled = true;
+                    this.elements.avatarSelect.disabled = false;
+                    this.updateStatus('Connected', 'connected');
+                    
+                } catch (error) {
+                    console.error('Error stopping stream:', error);
+                    this.showError('Error stopping stream: ' + error.message);
+                }
+            }
+        }
+        
+        // Initialize the client when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new MuseTalkWebRTCClient();
+        });
+    </script>
+</body>
+</html>
