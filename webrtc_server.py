@@ -30,7 +30,7 @@ from transformers import WhisperModel
 import pickle
 import glob
 import shutil
-from webrtc_avatar import WebRTCAvatar
+from scripts.realtime_inference import Avatar
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 class MuseTalkVideoTrack(VideoStreamTrack):
     """Custom video track that generates MuseTalk frames"""
     
-    def __init__(self, avatar: WebRTCAvatar, audio_processor: RealTimeAudioProcessor, models: Dict[str, Any]):
+    def __init__(self, avatar: Avatar, audio_processor: RealTimeAudioProcessor, models: Dict[str, Any]):
         super().__init__()
         self.avatar = avatar
         self.audio_processor = audio_processor
@@ -227,23 +227,37 @@ class MuseTalkWebRTCServer:
         """Initialize and preload all avatars from config"""
         logger.info("Initializing and preloading avatars...")
         
+        # Create a simple args object that the Avatar class expects
+        from argparse import Namespace
+        args = Namespace(
+            version="v15",
+            extra_margin=10,
+            parsing_mode="jaw",
+            left_cheek_width=90,
+            right_cheek_width=90,
+            audio_padding_length_left=2,
+            audio_padding_length_right=2,
+            skip_save_images=True
+        )
+        
+        # Make args and required globals available for the Avatar class
+        import scripts.realtime_inference
+        scripts.realtime_inference.args = args
+        scripts.realtime_inference.vae = self.models['vae']
+        scripts.realtime_inference.fp = self.models['fp']
+        
         for avatar_id in self.config:
             try:
                 avatar_config = self.config[avatar_id]
                 logger.info(f"Preloading avatar {avatar_id}...")
                 
-                # Force preparation to True to ensure all materials are preloaded
-                avatar = WebRTCAvatar(
+                # Use the original Avatar class
+                avatar = Avatar(
                     avatar_id=avatar_id,
                     video_path=avatar_config["video_path"],
                     bbox_shift=avatar_config.get("bbox_shift", 0),
                     batch_size=1,  # Use batch size 1 for real-time
-                    preparation=True,  # Always preload materials
-                    version="v15",
-                    extra_margin=10,
-                    parsing_mode="jaw",
-                    left_cheek_width=90,
-                    right_cheek_width=90
+                    preparation=True  # Always preload materials
                 )
                 
                 # Verify all required materials are loaded
@@ -256,9 +270,6 @@ class MuseTalkWebRTCServer:
                 for attr in required_attrs:
                     if not hasattr(avatar, attr) or getattr(avatar, attr) is None:
                         raise ValueError(f"Avatar {avatar_id} missing required attribute: {attr}")
-                
-                # Compute latents using VAE
-                avatar.compute_latents(self.models['vae'])
                 
                 # Preload materials into GPU memory if available
                 if torch.cuda.is_available():
