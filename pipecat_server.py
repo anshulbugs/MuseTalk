@@ -23,11 +23,17 @@ from pipecat.frames.frames import Frame, AudioRawFrame, ImageRawFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineTask
-from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
-from pipecat.services.cartesia import CartesiaTTSService
 from pipecat.transports.services.daily import DailyParams, DailyTransport
-from pipecat.vad.silero import SileroVADAnalyzer
+# VAD import - try different locations based on Pipecat version
+try:
+    from pipecat.vad.silero import SileroVADAnalyzer
+except ImportError:
+    try:
+        from pipecat.services.silero import SileroVADAnalyzer
+    except ImportError:
+        # Fallback - no VAD
+        SileroVADAnalyzer = None
 
 # MuseTalk imports
 from musetalk.utils.utils import load_all_model
@@ -288,22 +294,26 @@ async def main():
     # Create MuseTalk processor
     musetalk_processor = MuseTalkProcessor(args.config)
     
-    # Create VAD analyzer
-    vad_analyzer = SileroVADAnalyzer()
+    # Create VAD analyzer if available
+    vad_analyzer = SileroVADAnalyzer() if SileroVADAnalyzer else None
     
     # Create Daily transport
+    transport_params = DailyParams(
+        audio_out_enabled=True,
+        camera_out_enabled=True,
+        camera_out_width=512,
+        camera_out_height=512,
+        vad_enabled=vad_analyzer is not None,
+    )
+    
+    if vad_analyzer:
+        transport_params.vad_analyzer = vad_analyzer
+    
     transport = DailyTransport(
         room_url=args.room_url,
         token=args.token,
         bot_name="MuseTalk Avatar",
-        params=DailyParams(
-            audio_out_enabled=True,
-            camera_out_enabled=True,
-            camera_out_width=512,
-            camera_out_height=512,
-            vad_enabled=True,
-            vad_analyzer=vad_analyzer,
-        )
+        params=transport_params
     )
     
     # Create pipeline
