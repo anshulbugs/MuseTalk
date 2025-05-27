@@ -95,8 +95,10 @@ class SimpleVideoStreamer:
             <strong>Instructions:</strong>
             <ol>
                 <li>Click "Connect" to establish WebSocket connection</li>
+                <li>Allow microphone access when prompted</li>
                 <li>The avatar video will start streaming automatically</li>
                 <li>Speak into your microphone to see real-time lip-sync</li>
+                <li>Watch the audio energy bar and mouth state indicator</li>
             </ol>
         </div>
         
@@ -281,7 +283,11 @@ class SimpleVideoStreamer:
         self.clients[client_id] = {
             'ws': ws,
             'streaming': False,
-            'avatar': None
+            'avatar': None,
+            'audio_energy': 0.0,
+            'frame_offset': 0,
+            'mouth_state': 'closed',
+            'last_audio_time': 0
         }
         
         logger.info(f"New WebSocket connection: {client_id}")
@@ -356,19 +362,46 @@ class SimpleVideoStreamer:
         
         try:
             while client['streaming'] and client_id in self.clients:
-                # Get current avatar frame
-                frame_idx = frame_count % len(avatar.frame_list_cycle)
+                # Get current avatar frame with audio-responsive selection
+                base_frame_idx = frame_count % len(avatar.frame_list_cycle)
+                
+                # Apply audio-responsive frame offset
+                frame_offset = client.get('frame_offset', 0)
+                audio_energy = client.get('audio_energy', 0.0)
+                last_audio_time = client.get('last_audio_time', 0)
+                
+                # Decay audio energy over time (simulate mouth closing after speech)
+                time_since_audio = time.time() - last_audio_time
+                if time_since_audio > 0.5:  # 500ms decay
+                    audio_energy *= max(0, 1 - time_since_audio)
+                    frame_offset = int(frame_offset * max(0, 1 - time_since_audio))
+                
+                # Select frame based on audio energy
+                frame_idx = (base_frame_idx + frame_offset) % len(avatar.frame_list_cycle)
                 frame = avatar.frame_list_cycle[frame_idx].copy()
                 
                 # Add test overlay
                 current_time = time.time()
                 timestamp_text = f"Frame: {frame_count}"
-                cv2.putText(frame, timestamp_text, (10, 30), 
+                cv2.putText(frame, timestamp_text, (10, 30),
                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 
-                # Add moving circle
+                # Add audio energy indicator
+                mouth_state = client.get('mouth_state', 'closed')
+                audio_energy = client.get('audio_energy', 0.0)
+                energy_text = f"Audio: {audio_energy:.2f} ({mouth_state})"
+                cv2.putText(frame, energy_text, (10, 70),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                
+                # Add moving circle (changes color based on audio)
                 circle_x = int((current_time * 50) % frame.shape[1])
-                cv2.circle(frame, (circle_x, 50), 20, (255, 0, 0), -1)
+                circle_color = (0, 255, 0) if audio_energy > 0.2 else (255, 0, 0)
+                cv2.circle(frame, (circle_x, 50), 20, circle_color, -1)
+                
+                # Add audio energy bar
+                bar_width = int(audio_energy * 200)  # Max 200 pixels
+                cv2.rectangle(frame, (10, 90), (10 + bar_width, 110), (0, 255, 255), -1)
+                cv2.rectangle(frame, (10, 90), (210, 110), (255, 255, 255), 2)  # Border
                 
                 # Convert to JPEG and base64
                 _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
@@ -392,9 +425,46 @@ class SimpleVideoStreamer:
                 self.clients[client_id]['streaming'] = False
     
     async def process_audio_data(self, client_id: str, audio_data: list):
-        """Process audio data (simplified)"""
-        # For now, just log that we received audio
-        logger.debug(f"Received audio data from {client_id}: {len(audio_data)} bytes")
+        """Process audio data and generate lip-sync response"""
+        try:
+            if client_id not in self.clients or not self.clients[client_id]['avatar']:
+                return
+                
+            logger.info(f"Processing audio data from {client_id}: {len(audio_data)} bytes")
+            
+            # Convert audio data back to numpy array
+            audio_bytes = bytes(audio_data)
+            
+            # Simple audio-responsive effect: change avatar frame based on audio energy
+            client = self.clients[client_id]
+            avatar = client['avatar']
+            
+            # Calculate simple "energy" from audio data length (proxy for volume)
+            audio_energy = min(len(audio_data) / 1000.0, 1.0)  # Normalize
+            
+            # Use different avatar frames based on audio energy to simulate lip movement
+            if audio_energy > 0.5:
+                # High energy - use frames from middle of cycle (more mouth movement)
+                frame_offset = len(avatar.frame_list_cycle) // 3
+                client['mouth_state'] = 'open'
+            elif audio_energy > 0.2:
+                # Medium energy - use frames from start
+                frame_offset = len(avatar.frame_list_cycle) // 6
+                client['mouth_state'] = 'half_open'
+            else:
+                # Low energy - use default frames
+                frame_offset = 0
+                client['mouth_state'] = 'closed'
+            
+            # Store the audio energy for the video stream to use
+            client['audio_energy'] = audio_energy
+            client['frame_offset'] = frame_offset
+            client['last_audio_time'] = time.time()
+            
+            logger.info(f"Audio energy: {audio_energy:.2f}, mouth state: {client['mouth_state']}")
+            
+        except Exception as e:
+            logger.error(f"Error processing audio data: {e}")
     
     async def initialize_models(self):
         """Initialize MuseTalk models"""
