@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>JobTalk AI Avatar Interview</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container { 
+            background: white; 
+            padding: 30px; 
+            border-radius: 20px; 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 800px;
+            width: 100%;
+        }
+        .header { text-align: center; margin-bottom: 30px; }
+        .title { font-size: 28px; font-weight: bold; color: #333; margin-bottom: 10px; }
+        .subtitle { color: #666; margin-bottom: 20px; }
+        .main-content { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: start; }
+        .avatar-section { text-align: center; }
+        .avatar-title { font-size: 18px; font-weight: 600; margin-bottom: 15px; color: #333; }
+        #videoCanvas { 
+            border: 3px solid #e5e7eb; 
+            border-radius: 15px; 
+            width: 100%; 
+            max-width: 300px; 
+            height: 300px; 
+            background: #f3f4f6; 
+        }
+        .audio-indicators { 
+            margin-top: 15px; 
+            padding: 15px; 
+            background: #f8fafc; 
+            border-radius: 10px;
+        }
+        .audio-row { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            margin-bottom: 10px; 
+            font-size: 14px;
+        }
+        .audio-bar { 
+            width: 100%; 
+            height: 8px; 
+            background: #e5e7eb; 
+            border-radius: 4px; 
+            overflow: hidden;
+        }
+        .audio-fill { 
+            height: 100%; 
+            background: linear-gradient(90deg, #3b82f6, #1d4ed8); 
+            transition: width 0.2s ease;
+        }
+        .controls-section { display: flex; flex-direction: column; gap: 20px; }
+        .status-badge { 
+            display: inline-flex; 
+            align-items: center; 
+            padding: 8px 16px; 
+            border-radius: 20px; 
+            font-size: 14px; 
+            font-weight: 500;
+        }
+        .status-ready { background: #f3f4f6; color: #374151; }
+        .status-connecting { background: #fef3c7; color: #92400e; }
+        .status-active { background: #d1fae5; color: #065f46; }
+        .status-error { background: #fee2e2; color: #991b1b; }
+        .status-message { 
+            background: #f8fafc; 
+            padding: 15px; 
+            border-radius: 10px; 
+            text-align: center; 
+            font-size: 14px; 
+            color: #4b5563; 
+            margin: 15px 0;
+        }
+        .btn { 
+            padding: 15px 30px; 
+            border: none; 
+            border-radius: 10px; 
+            font-size: 16px; 
+            font-weight: 600; 
+            cursor: pointer; 
+            transition: all 0.3s ease;
+        }
+        .btn-primary { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; }
+        .btn-danger { background: linear-gradient(135deg, #ef4444, #dc2626); color: white; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .info-box { 
+            background: linear-gradient(135deg, #dbeafe, #bfdbfe); 
+            padding: 20px; 
+            border-radius: 15px; 
+            margin-top: 20px;
+        }
+        .info-title { font-weight: 600; color: #1e40af; margin-bottom: 10px; }
+        .info-list { list-style: none; padding: 0; margin: 0; }
+        .info-list li { color: #1e40af; font-size: 14px; margin-bottom: 5px; }
+        @media (max-width: 768px) {
+            .main-content { grid-template-columns: 1fr; gap: 20px; }
+            .container { padding: 20px; margin: 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">🎭 JobTalk AI Avatar Interview</h1>
+            <p class="subtitle">AI-powered interview with real-time avatar lip-sync responses</p>
+        </div>
+        
+        <div class="main-content">
+            <div class="avatar-section">
+                <h3 class="avatar-title">AI Interviewer Avatar</h3>
+                <canvas id="videoCanvas" width="300" height="300"></canvas>
+                
+                <div id="audioIndicators" class="audio-indicators" style="display: none;">
+                    <div class="audio-row">
+                        <span>Interviewer Speaking:</span>
+                        <span id="mouthState" style="font-weight: 600;">closed</span>
+                    </div>
+                    <div class="audio-bar">
+                        <div id="audioFill" class="audio-fill" style="width: 0%;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="controls-section">
+                <div style="text-align: center;">
+                    <div id="statusBadge" class="status-badge status-ready">⚪ Ready to Start</div>
+                </div>
+                
+                <div id="statusMessage" class="status-message">
+                    Ready to start JobTalk AI interview
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 15px;">
+                    <button id="startBtn" class="btn btn-primary" onclick="startInterview()">
+                        🎤 Start Interview
+                    </button>
+                    <button id="endBtn" class="btn btn-danger" onclick="endInterview()" disabled>
+                        🛑 End Interview
+                    </button>
+                </div>
+                
+                <div class="info-box">
+                    <div class="info-title">How it works:</div>
+                    <ul class="info-list">
+                        <li>• Connects to JobTalk AI interviewer</li>
+                        <li>• Avatar lip-syncs with AI responses</li>
+                        <li>• Real-time audio analysis</li>
+                        <li>• Natural conversation flow</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pipecat SDK -->
+    <script src="https://unpkg.com/@pipecat-ai/client-js@latest/dist/rtvi-client.umd.js"></script>
+    <script src="https://unpkg.com/@pipecat-ai/daily-transport@latest/dist/daily-transport.umd.js"></script>
+
+    <script>
+        // Configuration
+        const TOKEN = 'g90lzsyz';
+        const BASE_URL = 'https://aptask.jobtalk.ai/v1';
+        
+        // State
+        let websocket = null;
+        let canvas = null;
+        let ctx = null;
+        let rtviClient = null;
+        let botAudio = null;
+        let audioContext = null;
+        let analyser = null;
+        let isConnecting = false;
+        let callActive = false;
+        
+        window.onload = function() {
+            canvas = document.getElementById('videoCanvas');
+            ctx = canvas.getContext('2d');
+            connectToMuseTalk();
+        };
+        
+        // MuseTalk WebSocket connection
+        function connectToMuseTalk() {
+            const wsUrl = `ws://localhost:8080/ws`; // Adjust to your MuseTalk server
+            websocket = new WebSocket(wsUrl);
+            
+            websocket.onopen = function() {
+                console.log('MuseTalk connected');
+                websocket.send(JSON.stringify({ type: 'start_video' }));
+            };
+            
+            websocket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === 'video_frame') {
+                    const img = new Image();
+                    img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    img.src = 'data:image/jpeg;base64,' + data.frame;
+                }
+            };
+        }
+        
+        function sendAudioToMuseTalk(energy) {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+                const audioData = new Array(Math.floor(energy * 1000)).fill(128);
+                websocket.send(JSON.stringify({ type: 'audio_data', data: audioData }));
+                
+                // Update UI
+                const mouthStateText = energy > 0.5 ? 'open' : energy > 0.2 ? 'half_open' : 'closed';
+                document.getElementById('mouthState').textContent = mouthStateText;
+                document.getElementById('audioFill').style.width = (energy * 100) + '%';
+            }
+        }
+        
+        function setupAudioTrack(track) {
+            if (!botAudio) {
+                botAudio = document.createElement('audio');
+                botAudio.autoplay = true;
+                document.body.appendChild(botAudio);
+            }
+            
+            botAudio.srcObject = new MediaStream([track]);
+
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(new MediaStream([track]));
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                const checkAudio = () => {
+                    analyser.getByteFrequencyData(dataArray);
+                    let sum = 0;
+                    for (let i = 25; i < 180; i++) sum += dataArray[i];
+                    const energy = sum / 155 / 255;
+                    
+                    if (energy > 0.03) {
+                        sendAudioToMuseTalk(energy * 1.5);
+                    } else {
+                        sendAudioToMuseTalk(0);
+                    }
+                    requestAnimationFrame(checkAudio);
+                };
+                checkAudio();
+            }
+        }
+        
+        async function startInterview() {
+            if (isConnecting) return;
+            isConnecting = true;
+            
+            updateStatus('connecting', 'Connecting to JobTalk...');
+            
+            try {
+                const transport = new DailyTransport.DailyTransport();
+                
+                rtviClient = new RTVIClient.RTVIClient({
+                    transport,
+                    params: {
+                        baseUrl: BASE_URL,
+                        endpoints: { connect: `/webrtc-screening/start-interview/${TOKEN}` },
+                        metadata: { token: TOKEN }
+                    },
+                    enableMic: true,
+                    enableCam: false,
+                    callbacks: {
+                        onConnected: () => updateStatus('connecting', 'Connected - establishing audio...'),
+                        onBotReady: () => {
+                            setTimeout(() => {
+                                isConnecting = false;
+                                callActive = true;
+                                updateStatus('active', 'Interview in progress');
+                                document.getElementById('audioIndicators').style.display = 'block';
+                                const tracks = rtviClient?.tracks();
+                                if (tracks?.bot?.audio) setupAudioTrack(tracks.bot.audio);
+                            }, 500);
+                        },
+                        onError: (error) => {
+                            console.error('JobTalk error:', error);
+                            isConnecting = false;
+                            updateStatus('error', 'Connection failed');
+                        }
+                    }
+                });
+
+                rtviClient.on(RTVIClient.RTVIEvent.TrackStarted, (track, participant) => {
+                    if (!participant?.local && track.kind === 'audio') {
+                        setupAudioTrack(track);
+                    }
+                });
+
+                await rtviClient.initDevices();
+                await rtviClient.connect();
+                
+            } catch (error) {
+                console.error('Connection error:', error);
+                isConnecting = false;
+                updateStatus('error', 'Connection failed');
+            }
+        }
+        
+        async function endInterview() {
+            try {
+                if (rtviClient) {
+                    await rtviClient.disconnect();
+                    rtviClient = null;
+                }
+                if (audioContext) {
+                    await audioContext.close();
+                    audioContext = null;
+                }
+                callActive = false;
+                isConnecting = false;
+                document.getElementById('audioIndicators').style.display = 'none';
+                updateStatus('ready', 'Interview ended');
+            } catch (error) {
+                console.error('End error:', error);
+            }
+        }
+        
+        function updateStatus(type, message) {
+            document.getElementById('statusMessage').textContent = message;
+            const badge = document.getElementById('statusBadge');
+            const startBtn = document.getElementById('startBtn');
+            const endBtn = document.getElementById('endBtn');
+            
+            badge.className = `status-badge status-${type}`;
+            
+            switch(type) {
+                case 'ready':
+                    badge.textContent = '⚪ Ready to Start';
+                    startBtn.disabled = false;
+                    endBtn.disabled = true;
+                    break;
+                case 'connecting':
+                    badge.textContent = '🟡 Connecting...';
+                    startBtn.disabled = true;
+                    endBtn.disabled = false;
+                    break;
+                case 'active':
+                    badge.textContent = '🟢 Interview Active';
+                    startBtn.disabled = true;
+                    endBtn.disabled = false;
+                    break;
+                case 'error':
+                    badge.textContent = '🔴 Error';
+                    startBtn.disabled = false;
+                    endBtn.disabled = true;
+                    break;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -71,56 +71,133 @@ class SimpleVideoStreamer:
 <!DOCTYPE html>
 <html>
 <head>
-    <title>MuseTalk Simple Video Stream</title>
+    <title>JobTalk AI Interview</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f0f0f0; }
-        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }
-        .video-container { text-align: center; margin: 20px 0; }
-        #videoCanvas { border: 2px solid #333; border-radius: 10px; }
-        .controls { text-align: center; margin: 20px 0; }
-        button { padding: 10px 20px; margin: 5px; font-size: 16px; border: none; border-radius: 5px; cursor: pointer; }
-        .connect { background: #4CAF50; color: white; }
-        .disconnect { background: #f44336; color: white; }
-        .status { padding: 10px; margin: 10px 0; border-radius: 5px; text-align: center; }
-        .connected { background: #d4edda; color: #155724; }
-        .disconnected { background: #f8d7da; color: #721c24; }
-        .info { background: #d1ecf1; color: #0c5460; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        body { font-family: Arial, sans-serif; margin: 0; background: #f9fafb; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { display: flex; align-items: center; margin-bottom: 30px; }
+        .logo { height: 32px; margin-right: 10px; }
+        .powered-by { font-size: 12px; color: #666; }
+        .main-content { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
+        .job-details { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .job-title { font-size: 32px; font-weight: bold; color: #111; margin-bottom: 10px; }
+        .company-name { font-size: 20px; color: #666; margin-bottom: 20px; }
+        .job-meta { display: flex; gap: 20px; margin-bottom: 20px; color: #666; }
+        .job-description { line-height: 1.6; color: #374151; margin-bottom: 30px; }
+        .skills-section { margin-bottom: 30px; }
+        .skills-title { font-size: 18px; font-weight: 600; margin-bottom: 15px; }
+        .skills-content { background: #f9fafb; padding: 15px; border-radius: 8px; }
+        .recruiter-section { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .recruiter-title { font-size: 18px; font-weight: 600; margin-bottom: 15px; }
+        .recruiter-info { margin-bottom: 10px; }
+        .interview-panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); position: sticky; top: 20px; }
+        .interview-title { font-size: 18px; font-weight: 600; margin-bottom: 15px; text-align: center; }
+        .avatar-container { text-align: center; margin-bottom: 20px; }
+        #videoCanvas { border: 2px solid #e5e7eb; border-radius: 12px; width: 100%; max-width: 300px; height: 300px; background: #f3f4f6; }
+        .interview-status { padding: 10px; margin: 15px 0; border-radius: 8px; text-align: center; font-size: 14px; }
+        .status-disconnected { background: #fef2f2; color: #dc2626; }
+        .status-connected { background: #f0fdf4; color: #16a34a; }
+        .status-connecting { background: #fefce8; color: #ca8a04; }
+        .controls { text-align: center; margin: 15px 0; }
+        .btn { padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: 500; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-danger { background: #dc2626; color: white; }
+        .btn-danger:hover { background: #b91c1c; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .audio-indicators { margin-top: 15px; }
+        .audio-bar { width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 10px 0; }
+        .audio-fill { height: 100%; background: #2563eb; transition: width 0.2s; }
+        .tips { background: #f0f9ff; padding: 15px; border-radius: 8px; margin-top: 20px; }
+        .tips-title { font-weight: 600; margin-bottom: 10px; }
+        .tips ul { margin: 0; padding-left: 20px; }
+        .tips li { margin-bottom: 5px; font-size: 14px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🎭 MuseTalk Simple Video Stream</h1>
-        
-        <div class="info">
-            <strong>Instructions:</strong>
-            <ol>
-                <li>Click "Connect" to establish WebSocket connection</li>
-                <li>Allow microphone access when prompted</li>
-                <li>The avatar video will start streaming automatically</li>
-                <li>Speak into your microphone to see real-time lip-sync</li>
-                <li>Watch the audio energy bar and mouth state indicator</li>
-            </ol>
+        <div class="header">
+            <div class="powered-by">
+                <span>Powered by</span>
+                <strong style="color: #2563eb; margin-left: 5px;">JobTalk</strong>
+            </div>
         </div>
         
-        <div class="video-container">
-            <canvas id="videoCanvas" width="512" height="512"></canvas>
-        </div>
-        
-        <div class="controls">
-            <button id="connectBtn" class="connect" onclick="connect()">Connect</button>
-            <button id="disconnectBtn" class="disconnect" onclick="disconnect()" disabled>Disconnect</button>
-        </div>
-        
-        <div id="status" class="status disconnected">Disconnected</div>
-        
-        <div class="info">
-            <strong>Features:</strong>
-            <ul>
-                <li>✅ Real-time avatar video streaming</li>
-                <li>✅ Audio-to-video lip-sync generation</li>
-                <li>✅ Simple WebSocket-based streaming</li>
-                <li>✅ No complex WebRTC setup required</li>
-            </ul>
+        <div class="main-content">
+            <div class="job-details">
+                <h1 class="job-title">Senior Software Engineer</h1>
+                <p class="company-name">TechCorp Solutions</p>
+                
+                <div class="job-meta">
+                    <span>San Francisco, CA</span>
+                    <span>Full-time</span>
+                    <span>Remote</span>
+                </div>
+                
+                <div class="job-description">
+                    <p>We are seeking a talented Senior Software Engineer to join our dynamic team. You will be responsible for designing, developing, and maintaining high-quality software solutions that drive our business forward. This role offers the opportunity to work with cutting-edge technologies and collaborate with a team of passionate developers.</p>
+                    
+                    <p>As a Senior Software Engineer, you will lead technical initiatives, mentor junior developers, and contribute to architectural decisions that shape our platform's future. We value innovation, collaboration, and continuous learning.</p>
+                </div>
+                
+                <div class="skills-section">
+                    <h3 class="skills-title">Required Skills</h3>
+                    <div class="skills-content">
+                        JavaScript, React, Node.js, Python, AWS, Docker, Git, Agile Development
+                    </div>
+                </div>
+                
+                <div class="skills-section">
+                    <h3 class="skills-title">Desired Skills</h3>
+                    <div class="skills-content">
+                        TypeScript, GraphQL, Kubernetes, CI/CD, Machine Learning, System Design
+                    </div>
+                </div>
+                
+                <div class="recruiter-section">
+                    <h3 class="recruiter-title">Recruiter Details</h3>
+                    <div class="recruiter-info"><strong>Name:</strong> Sarah Johnson</div>
+                    <div class="recruiter-info"><strong>Email:</strong> sarah.johnson@techcorp.com</div>
+                    <div class="recruiter-info"><strong>Phone:</strong> (555) 123-4567</div>
+                </div>
+            </div>
+            
+            <div class="interview-panel">
+                <h3 class="interview-title">AI Pre-screening Interview</h3>
+                
+                <div class="avatar-container">
+                    <canvas id="videoCanvas" width="300" height="300"></canvas>
+                </div>
+                
+                <div id="status" class="interview-status status-disconnected">
+                    Ready to start interview
+                </div>
+                
+                <div class="controls">
+                    <button id="connectBtn" class="btn btn-primary" onclick="connect()">Start Interview</button>
+                    <button id="disconnectBtn" class="btn btn-danger" onclick="disconnect()" disabled>End Interview</button>
+                </div>
+                
+                <div class="audio-indicators" id="audioIndicators" style="display: none;">
+                    <div style="font-size: 14px; margin-bottom: 5px;">
+                        <span>Interviewer Speaking: </span>
+                        <span id="mouthState">closed</span>
+                    </div>
+                    <div class="audio-bar">
+                        <div id="audioFill" class="audio-fill" style="width: 0%;"></div>
+                    </div>
+                </div>
+                
+                <div class="tips">
+                    <div class="tips-title">Interview Tips:</div>
+                    <ul>
+                        <li>Find a quiet space with good lighting</li>
+                        <li>Speak clearly and at a moderate pace</li>
+                        <li>Listen carefully to questions before responding</li>
+                        <li>Be authentic and showcase your experience</li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
 
