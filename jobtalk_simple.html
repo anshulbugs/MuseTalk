@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JobTalk AI Avatar Interview</title>
     <style>
         body { 
@@ -168,11 +169,12 @@
     <script src="https://unpkg.com/@pipecat-ai/daily-transport@latest/dist/daily-transport.umd.js"></script>
 
     <script>
-        // Configuration
+        // Configuration - exactly matching your original code
         const TOKEN = 'g90lzsyz';
         const BASE_URL = 'https://aptask.jobtalk.ai/v1';
+        const CONNECTION_COOLDOWN_MS = 3000;
         
-        // State
+        // State variables - exactly matching your original code
         let websocket = null;
         let canvas = null;
         let ctx = null;
@@ -180,8 +182,15 @@
         let botAudio = null;
         let audioContext = null;
         let analyser = null;
+        let animationFrame = null;
         let isConnecting = false;
         let callActive = false;
+        let connectionAttemptCount = 0;
+        let lastConnectionAttemptTime = 0;
+        
+        const log = (message) => {
+            console.log(`[JobTalk Interview]: ${message}`);
+        };
         
         window.onload = function() {
             canvas = document.getElementById('videoCanvas');
@@ -191,11 +200,11 @@
         
         // MuseTalk WebSocket connection
         function connectToMuseTalk() {
-            const wsUrl = `ws://localhost:8080/ws`; // Adjust to your MuseTalk server
+            const wsUrl = `ws://localhost:8080/ws`;
             websocket = new WebSocket(wsUrl);
             
             websocket.onopen = function() {
-                console.log('MuseTalk connected');
+                log('MuseTalk connected');
                 websocket.send(JSON.stringify({ type: 'start_video' }));
             };
             
@@ -221,112 +230,287 @@
             }
         }
         
-        function setupAudioTrack(track) {
-            if (!botAudio) {
-                botAudio = document.createElement('audio');
-                botAudio.autoplay = true;
-                document.body.appendChild(botAudio);
-            }
-            
-            botAudio.srcObject = new MediaStream([track]);
+        // Setup audio track - exactly matching your original setupAudioTrack function
+        const setupAudioTrack = (track) => {
+            if (botAudio) {
+                if (botAudio.srcObject) {
+                    const oldTrack = botAudio.srcObject.getAudioTracks()[0];
+                    if (oldTrack?.id === track.id) return;
+                }
+                botAudio.srcObject = new MediaStream([track]);
 
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const source = audioContext.createMediaStreamSource(new MediaStream([track]));
-                analyser = audioContext.createAnalyser();
-                analyser.fftSize = 256;
-                source.connect(analyser);
+                if (!audioContext) {
+                    try {
+                        audioContext = new AudioContext();
+                        const source = audioContext.createMediaStreamSource(new MediaStream([track]));
+                        analyser = audioContext.createAnalyser();
 
-                const dataArray = new Uint8Array(analyser.frequencyBinCount);
-                const checkAudio = () => {
-                    analyser.getByteFrequencyData(dataArray);
-                    let sum = 0;
-                    for (let i = 25; i < 180; i++) sum += dataArray[i];
-                    const energy = sum / 155 / 255;
-                    
-                    if (energy > 0.03) {
-                        sendAudioToMuseTalk(energy * 1.5);
-                    } else {
-                        sendAudioToMuseTalk(0);
+                        analyser.fftSize = 256;
+                        analyser.smoothingTimeConstant = 0.8;
+                        source.connect(analyser);
+
+                        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+                        const checkAudioEnergy = () => {
+                            if (!analyser) return;
+
+                            analyser.getByteFrequencyData(dataArray);
+
+                            let sum = 0;
+                            const midStart = Math.floor(dataArray.length * 0.1);
+                            const midEnd = Math.floor(dataArray.length * 0.7);
+
+                            for (let i = midStart; i < midEnd; i++) {
+                                sum += dataArray[i];
+                            }
+
+                            const energy = sum / (midEnd - midStart) / 255;
+
+                            if (energy > 0.03) {
+                                sendAudioToMuseTalk(energy * 1.5);
+                            } else {
+                                sendAudioToMuseTalk(0);
+                            }
+
+                            animationFrame = requestAnimationFrame(checkAudioEnergy);
+                        };
+
+                        checkAudioEnergy();
+                        log('Audio analysis started for new track');
+                    } catch (error) {
+                        log(`Error setting up audio analysis: ${error.message}`);
                     }
-                    requestAnimationFrame(checkAudio);
-                };
-                checkAudio();
+                }
             }
-        }
+        };
         
-        async function startInterview() {
-            if (isConnecting) return;
+        // Start connection - exactly matching your original startConnection function
+        const startConnection = async () => {
+            if (isConnecting) {
+                log('Connection already in progress, ignoring duplicate request');
+                return;
+            }
+
+            const now = Date.now();
+            const timeSinceLastAttempt = now - lastConnectionAttemptTime;
+            if (timeSinceLastAttempt < CONNECTION_COOLDOWN_MS && lastConnectionAttemptTime > 0) {
+                log(`Connection attempt too soon after previous attempt. Waiting ${CONNECTION_COOLDOWN_MS - timeSinceLastAttempt}ms.`);
+                return;
+            }
+
             isConnecting = true;
-            
-            updateStatus('connecting', 'Connecting to JobTalk...');
-            
+            lastConnectionAttemptTime = now;
+            connectionAttemptCount++;
+
             try {
+                updateStatus('connecting', 'Connecting to interview...');
+                log(`Starting connection attempt ${connectionAttemptCount}`);
+
                 const transport = new DailyTransport.DailyTransport();
-                
+
+                if (rtviClient) {
+                    log('Cleaning up existing client before creating new one');
+                    await rtviClient.disconnect();
+                    rtviClient = null;
+                }
+
+                log('Starting connection to WebRTC endpoint');
+
+                const clientParams = {
+                    baseUrl: BASE_URL,
+                    endpoints: {
+                        connect: `/webrtc-screening/start-interview/${TOKEN}`,
+                    },
+                    metadata: {
+                        token: TOKEN
+                    }
+                };
+
+                log('Client params: ' + JSON.stringify(clientParams, null, 2));
+
                 rtviClient = new RTVIClient.RTVIClient({
                     transport,
-                    params: {
-                        baseUrl: BASE_URL,
-                        endpoints: { connect: `/webrtc-screening/start-interview/${TOKEN}` },
-                        metadata: { token: TOKEN }
-                    },
+                    params: clientParams,
                     enableMic: true,
                     enableCam: false,
                     callbacks: {
-                        onConnected: () => updateStatus('connecting', 'Connected - establishing audio...'),
-                        onBotReady: () => {
+                        onConnected: () => {
+                            log('Client connected');
+                            updateStatus('connecting', 'Connected - establishing audio...');
+                        },
+                        onDisconnected: () => {
+                            log('Client disconnected');
+                            updateStatus('ready', 'Disconnected');
+                            isConnecting = false;
+                            callActive = false;
+                        },
+                        onTransportStateChanged: (state) => {
+                            log(`Transport state: ${state}`);
+                            if (state === 'ready') {
+                                const tracks = rtviClient?.tracks();
+                                if (tracks?.bot?.audio) {
+                                    setupAudioTrack(tracks.bot.audio);
+                                }
+                            }
+                        },
+                        onBotConnected: (participant) => {
+                            log(`Bot connected: ${JSON.stringify(participant)}`);
+                            updateStatus('connecting', 'Interviewer connected');
+                        },
+                        onBotDisconnected: (participant) => {
+                            log(`Bot disconnected: ${JSON.stringify(participant)}`);
+                            updateStatus('ready', 'Interviewer disconnected');
+                        },
+                        onBotReady: (data) => {
+                            log(`Bot ready: ${JSON.stringify(data)}`);
                             setTimeout(() => {
+                                const tracks = rtviClient?.tracks();
                                 isConnecting = false;
                                 callActive = true;
                                 updateStatus('active', 'Interview in progress');
                                 document.getElementById('audioIndicators').style.display = 'block';
-                                const tracks = rtviClient?.tracks();
-                                if (tracks?.bot?.audio) setupAudioTrack(tracks.bot.audio);
+                                if (tracks?.bot?.audio) {
+                                    setupAudioTrack(tracks.bot.audio);
+                                }
                             }, 500);
                         },
+                        onUserTranscript: (data) => {
+                            if (data.final) {
+                                log(`Candidate: ${data.text}`);
+                            }
+                        },
+                        onBotTranscript: (data) => {
+                            log(`Interviewer: ${data.text}`);
+                        },
+                        onMessageError: (error) => {
+                            log(`Message error: ${error}`);
+                            updateStatus('error', 'Error during interview');
+                        },
                         onError: (error) => {
-                            console.error('JobTalk error:', error);
+                            log(`Error: ${JSON.stringify(error, null, 2)}`);
                             isConnecting = false;
-                            updateStatus('error', 'Connection failed');
+                            updateStatus('error', 'Connection error');
                         }
                     }
                 });
 
                 rtviClient.on(RTVIClient.RTVIEvent.TrackStarted, (track, participant) => {
-                    if (!participant?.local && track.kind === 'audio') {
-                        setupAudioTrack(track);
+                    if (!participant?.local) {
+                        if (track.kind === 'audio') {
+                            setupAudioTrack(track);
+                        }
                     }
                 });
 
+                log('Initializing devices...');
+                updateStatus('connecting', 'Requesting microphone access...');
                 await rtviClient.initDevices();
+
+                log('Connecting to bot...');
                 await rtviClient.connect();
-                
+
+                log('Connection complete');
             } catch (error) {
-                console.error('Connection error:', error);
+                const errorMessage = error.message;
+                log(`Connection error: ${errorMessage}`);
                 isConnecting = false;
-                updateStatus('error', 'Connection failed');
+                updateStatus('error', 'Connection failed. Please try again.');
+
+                if (rtviClient) {
+                    try {
+                        await rtviClient.disconnect();
+                        rtviClient = null;
+                    } catch (disconnectError) {
+                        log(`Error during disconnect: ${disconnectError.message}`);
+                    }
+                }
+            } finally {
+                isConnecting = false;
             }
+        };
+        
+        // Initialize on page load - exactly matching your pattern
+        window.addEventListener('load', () => {
+            // Create audio element exactly like your code
+            botAudio = document.createElement('audio');
+            botAudio.autoplay = true;
+            document.body.appendChild(botAudio);
+        });
+        
+        // Cleanup - exactly matching your pattern
+        window.addEventListener('beforeunload', () => {
+            if (botAudio) {
+                if (botAudio.srcObject) {
+                    const tracks = botAudio.srcObject.getTracks();
+                    tracks.forEach(track => track.stop());
+                    botAudio.srcObject = null;
+                }
+                document.body.removeChild(botAudio);
+                botAudio = null;
+            }
+
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+                animationFrame = null;
+            }
+
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close();
+                audioContext = null;
+            }
+
+            if (rtviClient) {
+                rtviClient.disconnect();
+                rtviClient = null;
+            }
+        });
+        
+        async function startInterview() {
+            await startConnection();
         }
         
-        async function endInterview() {
+        // End interview - exactly matching your endInterview function
+        const endInterview = async () => {
             try {
+                log('Disconnecting from interview...');
+                updateStatus('connecting', 'Ending interview...');
+
+                if (animationFrame) {
+                    cancelAnimationFrame(animationFrame);
+                    animationFrame = null;
+                }
+
+                if (audioContext && audioContext.state !== 'closed') {
+                    try {
+                        await audioContext.close();
+                    } catch (e) {
+                        log(`Error closing audio context: ${e.message}`);
+                    }
+                    audioContext = null;
+                }
+
                 if (rtviClient) {
                     await rtviClient.disconnect();
                     rtviClient = null;
                 }
-                if (audioContext) {
-                    await audioContext.close();
-                    audioContext = null;
+
+                if (botAudio && botAudio.srcObject) {
+                    const tracks = botAudio.srcObject.getTracks();
+                    tracks.forEach(track => track.stop());
+                    botAudio.srcObject = null;
                 }
+
+                log('Disconnection complete');
                 callActive = false;
                 isConnecting = false;
-                document.getElementById('audioIndicators').style.display = 'none';
                 updateStatus('ready', 'Interview ended');
+                document.getElementById('audioIndicators').style.display = 'none';
             } catch (error) {
-                console.error('End error:', error);
+                const errorMessage = error.message;
+                log(`Disconnect error: ${errorMessage}`);
+                updateStatus('error', 'Error ending interview');
             }
-        }
+        };
         
         function updateStatus(type, message) {
             document.getElementById('statusMessage').textContent = message;
